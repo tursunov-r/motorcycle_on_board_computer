@@ -209,3 +209,4 @@ __marimo__/
 # config files
 fuel_calib.json
 trip.json
+main/test.py

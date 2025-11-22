@@ -50,8 +50,9 @@ def main():
     tft.fill(s3lcd.BLACK)
     tft.rotation(3)
     tft.show()
-    tft.png("pictures/logo.png", 0, 0)
-    tft.show()
+    for pos in range(tft.height(), 0):
+        tft.png("pictures/logo.png", pos, pos)
+        tft.show()
     time.sleep(3)
     tft.fill(s3lcd.BLACK)
     tft.png("pictures/background_n.png", 0, 0)

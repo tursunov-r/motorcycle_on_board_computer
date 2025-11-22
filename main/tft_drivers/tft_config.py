@@ -1,8 +1,7 @@
 """ LilyGo T-DISPLAY-S3 170x320 ST7789 display """
 
-from machine import Pin, freq
-
 import s3lcd
+from machine import Pin, freq
 
 LCD_POWER = Pin(15, Pin.OUT)
 RD = Pin(9, Pin.OUT)

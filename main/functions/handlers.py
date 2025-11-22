@@ -1,25 +1,28 @@
-import time, dht, ujson
 import math
-from machine import ADC, I2C, Pin, Timer
+import time
+
+import dht
 import functions.urtc as urtc
+import ujson
+from machine import ADC, I2C, Pin, Timer
 
 # ======================================================
 # Settings
 # ======================================================
-WHEEL_WIDTH = 120   # mm
-WHEEL_HEIGHT = 60   # % of width
-WHEEL_DIAMETER = 17 # wheel diameter (inches)
-FULL_FUEL = 17      # fuel tank capacity (liters)
-FUEL_FLOW_TRACK = 4 # fuel consumption on highway (L/100km)
+WHEEL_WIDTH = 120  # mm
+WHEEL_HEIGHT = 60  # % of width
+WHEEL_DIAMETER = 17  # wheel diameter (inches)
+FULL_FUEL = 17  # fuel tank capacity (liters)
+FUEL_FLOW_TRACK = 4  # fuel consumption on highway (L/100km)
 FUEL_FLOW_CITY = 7  # fuel consumption in city (L/100km)
 
 WHEEL_CIRCUMFERENCE = math.pi * (
     (WHEEL_DIAMETER * 25.4 + 2 * (WHEEL_WIDTH * WHEEL_HEIGHT / 100)) / 1000
 )
-PULSES_PER_REV = 1      # pulses per wheel revolution
-MEASURE_INTERVAL = 1000 # ms
-AVERAGE_WINDOW = 5      # speed averaging window size
-SAVE_INTERVAL = 60000   # save trip every 60 seconds
+PULSES_PER_REV = 1  # pulses per wheel revolution
+MEASURE_INTERVAL = 1000  # ms
+AVERAGE_WINDOW = 5  # speed averaging window size
+SAVE_INTERVAL = 60000  # save trip every 60 seconds
 TRIP_FILE = "../trip.json"
 
 # ======================================================
@@ -33,7 +36,7 @@ voltmetr = ADC(Pin(16))
 speed_pin = Pin(17, Pin.IN)
 
 # Speed pins (gear detection)
-_first = Pin(2,  Pin.IN, Pin.PULL_UP)
+_first = Pin(2, Pin.IN, Pin.PULL_UP)
 _second = Pin(3, Pin.IN, Pin.PULL_UP)
 _third = Pin(10, Pin.IN, Pin.PULL_UP)
 _four = Pin(11, Pin.IN, Pin.PULL_UP)
@@ -59,6 +62,7 @@ _last_save = _last_update
 _last_fuel = None
 _last_range = None
 
+
 # ======================================================
 # Interrupts and handlers
 # ======================================================
@@ -66,6 +70,7 @@ def _on_pulse(pin):
     """Increment pulse count on rising edge from wheel sensor."""
     global _pulse_count
     _pulse_count += 1
+
 
 # Attach interrupt for speed sensor
 speed_pin.irq(trigger=Pin.IRQ_RISING, handler=_on_pulse)
@@ -75,29 +80,34 @@ speed_pin.irq(trigger=Pin.IRQ_RISING, handler=_on_pulse)
 # ======================================================
 calib_cache = {"empty": None, "full": None}
 
+
 def load_calib():
     """Load fuel calibration values from file."""
     global calib_cache
     try:
         with open("../fuel_calib.json") as f:
             calib_cache = ujson.load(f)
-    except:
+    except FileNotFoundError:
         calib_cache = {"empty": None, "full": None}
+
 
 def save_calib():
     """Save current fuel calibration values to file."""
     with open("../fuel_calib.json", "w") as f:
         ujson.dump(calib_cache, f)
 
+
 def calibrate_empty():
     """Store current ADC value as 'empty' level."""
     calib_cache["empty"] = fuel.read()
     save_calib()
 
+
 def calibrate_full():
     """Store current ADC value as 'full' level."""
     calib_cache["full"] = fuel.read()
     save_calib()
+
 
 # ======================================================
 # Background updates (fuel and range)
@@ -108,7 +118,11 @@ def update_fuel(timer=None):
     e, f = calib_cache.get("empty"), calib_cache.get("full")
     if e is None or f is None or e == f:
         # keep previous value if we already had one, else show status
-        _last_fuel = _last_fuel if _last_fuel not in (None, "not calib") else "not calib"
+        _last_fuel = (
+            _last_fuel
+            if _last_fuel not in (None, "not calib")
+            else "not calib"
+        )
         return
 
     v = fuel.read()
@@ -120,9 +134,10 @@ def update_fuel(timer=None):
         if isinstance(_last_fuel, (int, float)):
             return
 
-    ratio = (e - v) / (e - f)           # normalize between empty and full
-    ratio = max(0, min(1, ratio))       # clamp to [0, 1]
+    ratio = (e - v) / (e - f)  # normalize between empty and full
+    ratio = max(0, min(1, ratio))  # clamp to [0, 1]
     _last_fuel = round(ratio * FULL_FUEL, 1)
+
 
 def update_range(timer=None):
     """Update cached remaining range based on fuel level and current speed."""
@@ -138,11 +153,12 @@ def update_range(timer=None):
         return
 
     consumption = (
-        FUEL_FLOW_TRACK if speed >= 100
-        else FUEL_FLOW_CITY if speed > 0
-        else FUEL_FLOW_TRACK
+        FUEL_FLOW_TRACK
+        if speed >= 100
+        else FUEL_FLOW_CITY if speed > 0 else FUEL_FLOW_TRACK
     )
     _last_range = round((fuel_val / consumption) * 100, 1)
+
 
 # ======================================================
 # Service sensors
@@ -150,28 +166,36 @@ def update_range(timer=None):
 def read_time():
     """Return formatted time from RTC with blinking separator."""
     dt = rtc.datetime()
-    return f"{dt.hour:02}:{dt.minute:02}" if dt.second % 2 == 0 else f"{dt.hour:02} {dt.minute:02}"
+    return (
+        f"{dt.hour:02}:{dt.minute:02}"
+        if dt.second % 2 == 0
+        else f"{dt.hour:02} {dt.minute:02}"
+    )
+
 
 def temperature():
     """Read temperature from DHT sensor; return 'err' if failed."""
     try:
         dht_sensor.measure()
         return f"{dht_sensor.temperature():.1f}C"
-    except:
+    except ValueError:
         return "err"
+
 
 def humidity():
     """Read humidity from DHT sensor; return 'err' if failed."""
     try:
         dht_sensor.measure()
         return f"{dht_sensor.humidity():.1f}"
-    except:
+    except ValueError:
         return "err"
+
 
 def get_voltage():
     """Read voltage from ADC and scale to actual value."""
     v = voltmetr.read() / 4095 * 15 * 1.1
     return round(v, 1)
+
 
 def get_transmission():
     """Detect current gear using dedicated input pins."""
@@ -191,12 +215,13 @@ def get_transmission():
         transmission_value = "N"
     return transmission_value
 
+
 # ======================================================
 # Master logic (periodic updates)
 # ======================================================
 def update_all(timer=None):
     """Compute speed, accumulate trip distance, and trigger periodic save."""
-    global _pulse_count, _speed_history, _trip_distance, _current_speed, _last_save, _last_update
+    global _pulse_count, _trip_distance, _current_speed, _last_update
 
     # Convert pulses to distance
     revs = _pulse_count / PULSES_PER_REV
@@ -223,9 +248,11 @@ def update_all(timer=None):
     if time.ticks_diff(now, _last_save) > SAVE_INTERVAL:
         save_trip()
 
+
 # Configure periodic timer for main updates
 _timer = Timer(0)
 _timer.init(period=MEASURE_INTERVAL, mode=Timer.PERIODIC, callback=update_all)
+
 
 # ======================================================
 # Trip persistence
@@ -236,18 +263,20 @@ def load_trip():
     try:
         with open(TRIP_FILE) as f:
             _trip_distance = float(ujson.load(f).get("trip", 0))
-    except:
+    except FileNotFoundError:
         _trip_distance = 0.0
+
 
 def save_trip():
     """Persist current trip distance to file and update last save timestamp."""
-    global _trip_distance, _last_save
+    global _last_save
     try:
         with open(TRIP_FILE, "w") as f:
             ujson.dump({"trip": _trip_distance}, f)
         _last_save = time.ticks_ms()
-    except:
+    except FileNotFoundError:
         pass
+
 
 def reset_trip():
     """Reset trip distance to zero and save."""
@@ -255,19 +284,25 @@ def reset_trip():
     _trip_distance = 0.0
     save_trip()
 
+
 # Initialize trip from storage
 load_trip()
+
 
 def pause_trip_timer():
     """Stop periodic trip updates (timer deinit)."""
     try:
         _timer.deinit()
-    except:
+    except ValueError:
         pass
+
 
 def resume_trip_timer():
     """Resume periodic trip updates (timer init)."""
-    _timer.init(period=MEASURE_INTERVAL, mode=Timer.PERIODIC, callback=update_all)
+    _timer.init(
+        period=MEASURE_INTERVAL, mode=Timer.PERIODIC, callback=update_all
+    )
+
 
 def set_trip_zero_and_save():
     """Force set trip to zero and persist immediately."""
@@ -277,36 +312,49 @@ def set_trip_zero_and_save():
         with open(TRIP_FILE, "w") as f:
             ujson.dump({"trip": _trip_distance}, f)
         _last_save = time.ticks_ms()
-    except:
+    except FileNotFoundError:
         pass
+
 
 # ======================================================
 # API
 # ======================================================
 def get_speed():
     """Return current speed (averaged if available)."""
-    return int(sum(_speed_history) / len(_speed_history)) if _speed_history else _current_speed
+    return (
+        int(sum(_speed_history) / len(_speed_history))
+        if _speed_history
+        else _current_speed
+    )
+
 
 def get_trip_km():
     """Return total trip distance in kilometers."""
     return round(_trip_distance, 1)
 
+
 def get_fuel_level():
     """Return last computed fuel level or status string."""
     return _last_fuel
+
 
 def get_remaining_range():
     """Return last computed remaining range or status string."""
     return _last_range
 
+
 # ======================================================
 # Timers for background updates
 # ======================================================
-fuel_timer = Timer(1)
-fuel_timer.init(period=10000, mode=Timer.PERIODIC, callback=update_fuel)  # every 10 sec
+fuel_timer = Timer(5)
+fuel_timer.init(
+    period=10000, mode=Timer.PERIODIC, callback=update_fuel
+)  # every 10 sec
 
 range_timer = Timer(2)
-range_timer.init(period=5000, mode=Timer.PERIODIC, callback=update_range) # every 5 sec
+range_timer.init(
+    period=5000, mode=Timer.PERIODIC, callback=update_range
+)  # every 5 sec
 
 # ======================================================
 # Initialization
@@ -319,7 +367,11 @@ update_range()
 
 # Start background timers after initial priming
 fuel_timer = Timer(1)
-fuel_timer.init(period=10000, mode=Timer.PERIODIC, callback=update_fuel)  # every 10 sec
+fuel_timer.init(
+    period=10000, mode=Timer.PERIODIC, callback=update_fuel
+)  # every 10 sec
 
 range_timer = Timer(2)
-range_timer.init(period=5000, mode=Timer.PERIODIC, callback=update_range) # every 5 sec
+range_timer.init(
+    period=5000, mode=Timer.PERIODIC, callback=update_range
+)  # every 5 sec

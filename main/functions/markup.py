@@ -1,5 +1,5 @@
-from tft_drivers import tft_config
 import s3lcd
+from tft_drivers import tft_config
 
 tft = tft_config.config(tft_config.WIDE)
 

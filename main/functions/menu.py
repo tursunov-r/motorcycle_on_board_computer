@@ -1,8 +1,17 @@
+import time
+
 import s3lcd
 from fonts import vga2_bold_16x32 as big
+from functions.handlers import (
+    calibrate_empty,
+    calibrate_full,
+    pause_trip_timer,
+    resume_trip_timer,
+    rtc,
+    set_trip_zero_and_save,
+)
+from functions.markup import Markup, tft
 from tft_drivers.tft_buttons import Buttons
-from functions.handlers import *
-from functions.markup import *
 
 btn_select = Buttons().left
 btn_next = Buttons().right
@@ -16,56 +25,98 @@ MENU_ITEMS = [
 ]
 
 
-# =============== INACTION TRACKING FUNCTION ===============
+# --------------------------
+# Helper drawing / input
+# --------------------------
+def draw_menu(index):
+    """Draw menu title and items, highlighting current index."""
+    tft.fill(s3lcd.BLACK)
+    markup.top_left(big, "Menu", s3lcd.WHITE)
+    for i, item in enumerate(MENU_ITEMS):
+        color = s3lcd.YELLOW if i == index else s3lcd.WHITE
+        tft.text(big, item, 10, 50 + i * 40, color)
+    tft.show()
+
+
+def wait_release(button, poll_ms=50):
+    """Wait until the specified button is released (debounce)."""
+    while button.value() == 0:
+        time.sleep_ms(poll_ms)
+
+
+def any_button_pressed():
+    """Return True if any of the two buttons is pressed."""
+    return (btn_select.value() == 0) or (btn_next.value() == 0)
+
+
+# --------------------------
+# Menu action dispatch
+# --------------------------
+_MENU_ACTIONS = {
+    "Time": lambda: menu_set_time(),
+    "FUEL calibration": lambda: menu_fuel_calibration(),
+    "Reset Trip": lambda: menu_reset_trip(),
+}
+
+
+def handle_select(index):
+    """Call action for selected menu item (if exists)."""
+    key = MENU_ITEMS[index]
+    action = _MENU_ACTIONS.get(key)
+    if action:
+        action()
+
+
+# --------------------------
+# Main menu
+# --------------------------
 def show_menu(timeout=2000):
-    """main menu with auto-exit"""
+    """Main menu with auto-exit (preserves original behavior)."""
     index = 0
     tft.fill(s3lcd.BLACK)
-
-    last_action = time.ticks_ms()  # mark last active
+    last_action = time.ticks_ms()
 
     while True:
-        # --- check timeout inactive ---
+        # timeout check
         if time.ticks_diff(time.ticks_ms(), last_action) > timeout:
             tft.fill(s3lcd.BLACK)
             markup.center(big, "Exit menu", s3lcd.BLACK, s3lcd.RED)
             tft.show()
             time.sleep(1)
-            break  # exite in main
+            break
 
-        # --- draw menu ---
-        tft.fill(s3lcd.BLACK)
-        markup.top_left(big, "Menu", s3lcd.WHITE)
-        for i, item in enumerate(MENU_ITEMS):
-            color = s3lcd.YELLOW if i == index else s3lcd.WHITE
-            tft.text(big, item, 10, 50 + i * 40, color)
-        tft.show()
+        # draw
+        draw_menu(index)
 
-        # --- next ---
+        # handle next button: advance selection
         if btn_next.value() == 0:
             index = (index + 1) % len(MENU_ITEMS)
-            last_action = time.ticks_ms()  # update timer
+            last_action = time.ticks_ms()
             time.sleep_ms(200)
-            while btn_next.value() == 0:
-                time.sleep_ms(200)
+            wait_release(btn_next)
+            continue
 
-        # --- item selection  ---
+        # handle select button: execute action
         if btn_select.value() == 0:
             last_action = time.ticks_ms()
-            if MENU_ITEMS[index] == "Time":
-                menu_set_time()  # get timeout
-            elif MENU_ITEMS[index] == "Reset Trip":
-                menu_reset_trip()
-            elif MENU_ITEMS[index] == "FUEL calibration":
-                menu_fuel_calibration()
-
-            # wait release the buttons
-            while btn_select.value() == 0 or btn_next.value() == 0:
+            handle_select(index)
+            # wait release of either button (original behavior waited both)
+            while not btn_select.value() or not btn_next.value():
                 time.sleep_ms(200)
-
             last_action = time.ticks_ms()
+            """
+            redraw background
+            (original code did fill background after return)
+            """
+            tft.fill(s3lcd.BLACK)
+
+        # small delay to reduce CPU usage and allow responsiveness
+        time.sleep_ms(20)
 
 
+# --------------------------
+# Submenus (kept original logic)
+# --------------------------
 def menu_set_time():
     """set time menu"""
     time.sleep(1)
@@ -77,16 +128,16 @@ def menu_set_time():
 
     while True:
         tft.fill(s3lcd.BLACK)
-        if field == 0:
-            display_time = f"[{hour:02}]:{minute:02}"
-        else:
-            display_time = f"{hour:02}:[{minute:02}]"
-
+        display_time = (
+            f"[{hour:02}]:{minute:02}"
+            if field == 0
+            else f"{hour:02}:[{minute:02}]"
+        )
         markup.center(big, display_time, s3lcd.YELLOW)
         markup.top_left(big, "SET Time", s3lcd.WHITE)
         tft.show()
 
-        # timeout inactive
+        # timeout inactive -> save and exit
         if time.ticks_diff(time.ticks_ms(), last_press) > 5000:
             rtc.datetime(
                 (dt.year, dt.month, dt.day, dt.weekday, hour, minute, 0, 0)
@@ -134,7 +185,7 @@ def menu_fuel_calibration():
         markup.bottom_left(big, "NEXT -> switch", s3lcd.WHITE)
         tft.show()
 
-        # --- auto-exit if inactive ---
+        # auto-exit if inactive
         if time.ticks_diff(time.ticks_ms(), last_action) > 8000:
             tft.fill(s3lcd.BLACK)
             markup.center(big, "Exit fuel menu", s3lcd.RED)
@@ -142,13 +193,13 @@ def menu_fuel_calibration():
             time.sleep(1)
             return
 
-        # --- switch step ---
+        # switch step
         if not btn_next.value():
-            step = 1 - step  # switch EMPTY / FULL
+            step = 1 - step
             last_action = time.ticks_ms()
             time.sleep_ms(250)
 
-        # --- Confirm calibrate ---
+        # confirm calibrate
         if not btn_select.value():
             if step == 0:
                 calibrate_empty()
@@ -200,12 +251,12 @@ def menu_reset_trip():
 
         if not btn_select.value():
             last_action = time.ticks_ms()
-            # wait replace, for not active repeat
+            # wait release to prevent accidental repeats
             while not btn_select.value():
                 time.sleep_ms(50)
 
             if confirm:
-                # ⚠️ Safe reset: stop timer -> write -> start timer
+                # Safe reset: stop timer -> write -> start timer
                 pause_trip_timer()
                 set_trip_zero_and_save()
                 resume_trip_timer()

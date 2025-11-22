@@ -1,7 +1,7 @@
-from machine import Pin, PWM, ADC
 import time
-from tft_drivers.tft_config import BACKLIGHT
 
+from machine import ADC, PWM, Pin
+from tft_drivers.tft_config import BACKLIGHT
 
 PHOTO_PIN = 18
 MIN_BRIGHTNESS = 50  # min — background light
@@ -11,7 +11,7 @@ STEP = 50  # step for update
 
 photo_adc = ADC(Pin(PHOTO_PIN))
 photo_adc.atten(ADC.ATTN_11DB)
-backlight_pwm = PWM(Pin(BACKLIGHT))
+backlight_pwm = PWM(BACKLIGHT)
 backlight_pwm.freq(1000)
 
 _last_update = time.ticks_ms()

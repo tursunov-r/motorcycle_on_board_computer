@@ -1,23 +1,22 @@
 import time
+
 import s3lcd
-
 from fonts import vga2_bold_16x32 as big
-from tft_drivers.tft_buttons import Buttons
-
+from functions.brightness_control import update_brightness
 from functions.handlers import (
-    get_transmission,
-    get_speed,
-    get_voltage,
-    get_trip_km,
     get_fuel_level,
     get_remaining_range,
-    read_time,
+    get_speed,
+    get_transmission,
+    get_trip_km,
+    get_voltage,
     humidity,
+    read_time,
     temperature,
 )
-from functions.markup import *
+from functions.markup import Markup, tft
 from functions.menu import show_menu
-from functions.brightness_control import update_brightness
+from tft_drivers.tft_buttons import Buttons
 
 markup = Markup()
 
@@ -28,7 +27,8 @@ hold_start = None
 
 
 def wait_for_both_pressed(timeout=5000):
-    """Неблокирующая проверка — возвращает True, если удерживают обе кнопки timeout мс"""
+    """Неблокирующая проверка — возвращает True,
+    если удерживают обе кнопки timeout мс"""
     global hold_start
     if not btn_select.value() and not btn_next.value():
         if hold_start is None:
@@ -50,10 +50,10 @@ def main():
     tft.fill(s3lcd.BLACK)
     tft.rotation(3)
     tft.show()
-    for pos in range(tft.height(), 0):
-        tft.png("pictures/logo.png", pos, pos)
+    for pos in range(tft.height(), -17, 17):
+        tft.png("pictures/logo.png", 0, pos)
         tft.show()
-    time.sleep(3)
+    time.sleep(1)
     tft.fill(s3lcd.BLACK)
     tft.png("pictures/background_n.png", 0, 0)
     tft.show()

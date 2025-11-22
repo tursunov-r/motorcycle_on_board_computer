@@ -3,14 +3,34 @@
 import collections
 import time
 
-DateTimeTuple = collections.namedtuple("DateTimeTuple", ["year", "month",
-                                                         "day", "weekday", "hour", "minute", "second", "millisecond"])
+DateTimeTuple = collections.namedtuple(
+    "DateTimeTuple",
+    [
+        "year",
+        "month",
+        "day",
+        "weekday",
+        "hour",
+        "minute",
+        "second",
+        "millisecond",
+    ],
+)
 
 
-def datetime_tuple(year=None, month=None, day=None, weekday=None, hour=None,
-                   minute=None, second=None, millisecond=None):
-    return DateTimeTuple(year, month, day, weekday, hour, minute,
-                         second, millisecond)
+def datetime_tuple(
+    year=None,
+    month=None,
+    day=None,
+    weekday=None,
+    hour=None,
+    minute=None,
+    second=None,
+    millisecond=None,
+):
+    return DateTimeTuple(
+        year, month, day, weekday, hour, minute, second, millisecond
+    )
 
 
 def _bcd2bin(value):
@@ -22,13 +42,24 @@ def _bin2bcd(value):
 
 
 def tuple2seconds(datetime):
-    return time.mktime((datetime.year, datetime.month, datetime.day,
-                        datetime.hour, datetime.minute, datetime.second, datetime.weekday, 0))
+    return time.mktime(
+        (
+            datetime.year,
+            datetime.month,
+            datetime.day,
+            datetime.hour,
+            datetime.minute,
+            datetime.second,
+            datetime.weekday,
+            0,
+        )
+    )
 
 
 def seconds2tuple(seconds):
-    (year, month, day, hour, minute,
-     second, weekday, _yday) = time.localtime(seconds)
+    (year, month, day, hour, minute, second, weekday, _yday) = time.localtime(
+        seconds
+    )
     return DateTimeTuple(year, month, day, weekday, hour, minute, second, 0)
 
 
@@ -56,8 +87,9 @@ class _BaseRTC:
 
     def datetime(self, datetime=None):
         if datetime is None:
-            buffer = self.i2c.readfrom_mem(self.address,
-                                           self._DATETIME_REGISTER, 7)
+            buffer = self.i2c.readfrom_mem(
+                self.address, self._DATETIME_REGISTER, 7
+            )
             if self._SWAP_DAY_WEEKDAY:
                 day = buffer[3]
                 weekday = buffer[4]
@@ -104,24 +136,24 @@ class DS1307(_BaseRTC):
 
 
 class DS3231(_BaseRTC):
-    _CONTROL_REGISTER = 0x0e
-    _STATUS_REGISTER = 0x0f
+    _CONTROL_REGISTER = 0x0E
+    _STATUS_REGISTER = 0x0F
     _DATETIME_REGISTER = 0x00
     _TEMPERATURE_MSB_REGISTER = 0x11
     _TEMPERATURE_LSB_REGISTER = 0x12
-    _ALARM_REGISTERS = (0x08, 0x0b)
-    _SQUARE_WAVE_REGISTER = 0x0e
+    _ALARM_REGISTERS = (0x08, 0x0B)
+    _SQUARE_WAVE_REGISTER = 0x0E
 
     def lost_power(self):
         return self._flag(self._STATUS_REGISTER, 0b10000000)
 
     def alarm(self, value=None, alarm=0):
-        return self._flag(self._STATUS_REGISTER,
-                          0b00000011 & (1 << alarm), value)
+        return self._flag(
+            self._STATUS_REGISTER, 0b00000011 & (1 << alarm), value
+        )
 
     def interrupt(self, alarm=0):
-        return self._flag(self._CONTROL_REGISTER,
-                          0b00000100 | (1 << alarm), 1)
+        return self._flag(self._CONTROL_REGISTER, 0b00000100 | (1 << alarm), 1)
 
     def no_interrupt(self):
         return self._flag(self._CONTROL_REGISTER, 0b00000011, 0)
@@ -137,27 +169,32 @@ class DS3231(_BaseRTC):
 
     def alarm_time(self, datetime=None, alarm=0):
         if datetime is None:
-            buffer = self.i2c.readfrom_mem(self.address,
-                                           self._ALARM_REGISTERS[alarm], 3)
+            buffer = self.i2c.readfrom_mem(
+                self.address, self._ALARM_REGISTERS[alarm], 3
+            )
             day = None
             weekday = None
             second = None
             if buffer[2] & 0b10000000:
                 pass
             elif buffer[2] & 0b01000000:
-                day = _bcd2bin(buffer[2] & 0x3f)
+                day = _bcd2bin(buffer[2] & 0x3F)
             else:
-                weekday = _bcd2bin(buffer[2] & 0x3f)
-            minute = (_bcd2bin(buffer[0] & 0x7f)
-                      if not buffer[0] & 0x80 else None)
-            hour = (_bcd2bin(buffer[1] & 0x7f)
-                    if not buffer[1] & 0x80 else None)
+                weekday = _bcd2bin(buffer[2] & 0x3F)
+            minute = (
+                _bcd2bin(buffer[0] & 0x7F) if not buffer[0] & 0x80 else None
+            )
+            hour = _bcd2bin(buffer[1] & 0x7F) if not buffer[1] & 0x80 else None
             if alarm == 0:
                 # handle seconds
                 buffer = self.i2c.readfrom_mem(
-                    self.address, self._ALARM_REGISTERS[alarm] - 1, 1)
-                second = (_bcd2bin(buffer[0] & 0x7f)
-                          if not buffer[0] & 0x80 else None)
+                    self.address, self._ALARM_REGISTERS[alarm] - 1, 1
+                )
+                second = (
+                    _bcd2bin(buffer[0] & 0x7F)
+                    if not buffer[0] & 0x80
+                    else None
+                )
             return datetime_tuple(
                 day=day,
                 weekday=weekday,
@@ -167,10 +204,12 @@ class DS3231(_BaseRTC):
             )
         datetime = datetime_tuple(*datetime)
         buffer = bytearray(3)
-        buffer[0] = (_bin2bcd(datetime.minute)
-                     if datetime.minute is not None else 0x80)
-        buffer[1] = (_bin2bcd(datetime.hour)
-                     if datetime.hour is not None else 0x80)
+        buffer[0] = (
+            _bin2bcd(datetime.minute) if datetime.minute is not None else 0x80
+        )
+        buffer[1] = (
+            _bin2bcd(datetime.hour) if datetime.hour is not None else 0x80
+        )
         if datetime.day is not None:
             if datetime.weekday is not None:
                 raise ValueError("can't specify both day and weekday")
@@ -182,8 +221,15 @@ class DS3231(_BaseRTC):
         self._register(self._ALARM_REGISTERS[alarm], buffer)
         if alarm == 0:
             # handle seconds
-            buffer = bytearray([_bin2bcd(datetime.second)
-                                if datetime.second is not None else 0x80])
+            buffer = bytearray(
+                [
+                    (
+                        _bin2bcd(datetime.second)
+                        if datetime.second is not None
+                        else 0x80
+                    )
+                ]
+            )
             self._register(self._ALARM_REGISTERS[alarm] - 1, buffer)
 
     def get_temperature(self):
@@ -210,8 +256,8 @@ class PCF8523(_BaseRTC):
     _CONTROL2_REGISTER = 0x01
     _CONTROL3_REGISTER = 0x02
     _DATETIME_REGISTER = 0x03
-    _ALARM_REGISTER = 0x0a
-    _SQUARE_WAVE_REGISTER = 0x0f
+    _ALARM_REGISTER = 0x0A
+    _SQUARE_WAVE_REGISTER = 0x0F
     _SWAP_DAY_WEEKDAY = True
 
     def __init__(self, *args, **kwargs):
@@ -245,26 +291,45 @@ class PCF8523(_BaseRTC):
 
     def alarm_time(self, datetime=None):
         if datetime is None:
-            buffer = self.i2c.readfrom_mem(self.address,
-                                           self._ALARM_REGISTER, 4)
+            buffer = self.i2c.readfrom_mem(
+                self.address, self._ALARM_REGISTER, 4
+            )
             return datetime_tuple(
-                weekday=_bcd2bin(buffer[3] &
-                                 0x7f) if not buffer[3] & 0x80 else None,
-                day=_bcd2bin(buffer[2] &
-                             0x7f) if not buffer[2] & 0x80 else None,
-                hour=_bcd2bin(buffer[1] &
-                              0x7f) if not buffer[1] & 0x80 else None,
-                minute=_bcd2bin(buffer[0] &
-                                0x7f) if not buffer[0] & 0x80 else None,
+                weekday=(
+                    _bcd2bin(buffer[3] & 0x7F)
+                    if not buffer[3] & 0x80
+                    else None
+                ),
+                day=(
+                    _bcd2bin(buffer[2] & 0x7F)
+                    if not buffer[2] & 0x80
+                    else None
+                ),
+                hour=(
+                    _bcd2bin(buffer[1] & 0x7F)
+                    if not buffer[1] & 0x80
+                    else None
+                ),
+                minute=(
+                    _bcd2bin(buffer[0] & 0x7F)
+                    if not buffer[0] & 0x80
+                    else None
+                ),
             )
         datetime = datetime_tuple(*datetime)
         buffer = bytearray(4)
-        buffer[0] = (_bin2bcd(datetime.minute)
-                     if datetime.minute is not None else 0x80)
-        buffer[1] = (_bin2bcd(datetime.hour)
-                     if datetime.hour is not None else 0x80)
-        buffer[2] = (_bin2bcd(datetime.day)
-                     if datetime.day is not None else 0x80)
-        buffer[3] = (_bin2bcd(datetime.weekday) | 0b01000000
-                     if datetime.weekday is not None else 0x80)
+        buffer[0] = (
+            _bin2bcd(datetime.minute) if datetime.minute is not None else 0x80
+        )
+        buffer[1] = (
+            _bin2bcd(datetime.hour) if datetime.hour is not None else 0x80
+        )
+        buffer[2] = (
+            _bin2bcd(datetime.day) if datetime.day is not None else 0x80
+        )
+        buffer[3] = (
+            _bin2bcd(datetime.weekday) | 0b01000000
+            if datetime.weekday is not None
+            else 0x80
+        )
         self._register(self._ALARM_REGISTER, buffer)
